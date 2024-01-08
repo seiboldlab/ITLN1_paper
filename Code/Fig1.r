@@ -4,6 +4,7 @@ library(DESeq2)
 library(edgeR)
 library(beeswarm)
 library(openxlsx)
+library(enrichR)
 
 source("Helper_functions.r")
 
@@ -35,6 +36,7 @@ dds_Rna$treatment <- relevel(dds_Rna$treatment,"BSA")
 dds_Rna_sizeFactors<-estimateSizeFactors(dds_Rna)
 secRna_353_norm<-counts(dds_Rna_sizeFactors, normalized=T)
 secRna_353_norm_log<-log2(secRna_353_norm + 1)
+vstMat <- assay(varianceStabilizingTransformation(dds_Rna))
 
 # Make box plot of ITLN1,stratified by IL-13 vs BSA
 pdf("Fig1b.pdf",height=3.5,width=2.5)
@@ -58,6 +60,251 @@ res_Rna353<-topTags(qlf, n=nrow(secRna_353))
 res_Rna353<-res_Rna353[[1]]
 res_Rna353["ITLN1","PValue"] #3.63e-19
 res_Rna353["ITLN1","FDR"] #5.03e-16
+
+
+
+
+
+
+
+
+
+
+
+
+#====================================#
+#              Figure 1c             #
+#====================================#
+
+############################# Do WGCNA
+
+allData<-t(vstMat)
+#Pick power
+powers <- 1:20
+sft = pickSoftThreshold(allData, powerVector = powers, verbose = 5)
+#Plot
+pdf(file = "WGCNA_softThreshold.bF.pdf", width = 9, height = 5);
+par(mfrow = c(1,2));
+cex1 = 0.9;
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+         main = paste("Scale independence"));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    labels=powers,cex=cex1,col="red");
+abline(h=0.90,col="red")
+plot(sft$fitIndices[,1], sft$fitIndices[,5],
+    xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+        main = paste("Mean connectivity"))
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+dev.off()
+softPower <- 10
+
+#Create Similarity Matrix
+pearson <- WGCNA::cor(as.matrix(allData),method="pearson")
+
+#Convert Similarity Matrix to Adjacency Matrix using Adjacency Function
+adjacency.p <- adjacency.fromSimilarity(pearson,type = "signed",power=softPower)
+
+#Convert Adjacency to TOM dissimilarity
+TOMdissim.p <- 1 - TOMsimilarity(adjacency.p,TOMType = "signed",TOMDenom = "min")
+
+#Perform hierarchical clustering on the dissimilarity matrix
+geneTree <- hclust(as.dist(TOMdissim.p), method = "average")
+
+#Cut tree
+x <- 0.5
+modules <- cutreeDynamic(dendro = geneTree,method='hybrid', distM = TOMdissim.p,pamStage=F, 
+	pamRespectsDendro = T, deepSplit=2, cutHeight=0.95, minClusterSize=40)
+modcolors <- labels2colors(modules)
+
+#Merge similar modules
+modMerged <- mergeCloseModules(allData, modcolors, cutHeight=0.1)
+moduleColors <- modMerged$colors 
+
+#Make gene2module table
+gene2module <- data.frame(gene=colnames(allData), module=moduleColors)
+gene2module <- na.omit(gene2module)
+
+#Calculate module eigengenes 
+datME<-moduleEigengenes(allData,moduleColors)$eigengenes
+
+#Get eigengene-based connectivity matrix, based on the eigengenes
+datKME <- signedKME(allData, datME)
+
+#Get hub genes
+ADJ1 <- abs(cor(allData, use="p"))^softPower
+Alldegrees1<-intramodularConnectivity(ADJ1, gene2module$module)
+hub_genes<-data.frame()
+for(i in 1:length(unique(gene2module$module))){
+    Alldegrees1$Module = gene2module$module
+    tmp = Alldegrees1[Alldegrees1$Module == unique(gene2module$module)[i], ]
+    hub_genes<-rbind(hub_genes, head(tmp[order(tmp$kWithin, decreasing=T),], n=nrow(tmp)))
+}
+
+#Create master module table
+gene2module<-read.table("Data/WGCNA.gene2module.txt",header=T,strings=F)
+gene2module_with_cor <- gene2module
+gene2module_with_cor$module<-factor(gene2module_with_cor$module,levels=c(sort(unique(gene2module_with_cor$module))))
+gene2module_with_cor$cor <- NA
+for(i in unique(gene2module_with_cor$module)) {
+    kME_name <- paste0("kME",i)
+    idx <- which(gene2module_with_cor$module==i)
+    gene.idx <- as.character(gene2module_with_cor[idx,"gene"])
+    gene2module_with_cor$cor[idx] <- datKME[gene.idx,kME_name]
+}
+#Add in Kwithin, etc
+gene2module_with_cor<-cbind(gene2module_with_cor,hub_genes[as.character(gene2module_with_cor$gene),])
+gene2module_with_cor<-gene2module_with_cor[,-ncol(gene2module_with_cor)]
+#Sort by module, then by correlation
+gene2module_with_cor<-gene2module_with_cor[with(gene2module_with_cor,order(module,-abs(cor))),]
+#Place into lists
+gene2module_with_cor_list<-list()
+for(i in 1:length(levels(gene2module_with_cor$module))){
+	gene2module_with_cor_list[[i]]<-gene2module_with_cor[which(gene2module_with_cor$module == 
+	levels(gene2module_with_cor$module)[i]),]
+	names(gene2module_with_cor_list)[i]<-levels(gene2module_with_cor$module)[i]
+}
+
+
+
+
+############################# Plot ITLN1 network with focus on ITLN1 connections
+
+#Create master module table for the brown module (Table S2)
+
+#Subselect brown module
+genes<-gene2module$gene[which(gene2module$module == "brown")]
+genes<-genes[-grep("ITLN1",genes)]
+#Get spearman correlation of all genes with ITLN1
+itln1Corrs<-apply(secRna_353_norm[genes,],1,
+	function(x)cor.test(secRna_353_norm["ITLN1",],x,method="spearman"))
+#Pull out the lists of correlations and pvalues and put into a dataframe
+tempMat<-as.data.frame(matrix(ncol=2,nrow=0))
+itln1Corrs<-t(sapply(itln1Corrs,function(x)rbind(tempMat,as.data.frame(matrix(c(x$estimate,x$p.value),nrow=1)))))
+colnames(itln1Corrs)<-c("correlation","pvalue")
+itln1Corrs<-as.data.frame(itln1Corrs)
+itln1Corrs[,1]<-simplify2array(itln1Corrs[,1])
+itln1Corrs[,2]<-simplify2array(itln1Corrs[,2])
+#Order and rank
+itln1Corrs<-itln1Corrs[order(itln1Corrs$correlation,decreasing=T),]
+itln1Corrs<-data.frame("gene"=rownames(itln1Corrs),"ITLN1_cor"=itln1Corrs$correlation,
+	"pvalue_cor"=itln1Corrs$pvalue,"qvalue_cor"=p.adjust(itln1Corrs$pvalue,method="fdr"),
+	"rank"=seq(nrow(itln1Corrs)),row.names=seq(nrow(itln1Corrs)),stringsAsFactors=F)
+#Add in ITLN1
+itln1Corrs<-rbind(data.frame("gene"="ITLN1","ITLN1_cor"=1,"pvalue_cor"=0,"qvalue_cor"=0,"rank"=0),itln1Corrs)
+#Add in cor (KME) and kWithin values too
+tempTab<-gene2module_with_cor_list$brown
+rownames(tempTab)<-tempTab$gene
+itln1Corrs<-cbind(itln1Corrs,KME=tempTab[itln1Corrs$gene,]$cor,kWithin=tempTab[itln1Corrs$gene,]$kWithin)
+#Also, read in differential expression results
+diffexp<-res_Rna353
+itln1Corrs<-cbind(itln1Corrs,"logFC_IL13"=diffexp[itln1Corrs$gene,]$logFC,"FDR_IL13"=diffexp[itln1Corrs$gene,]$FDR)
+#Save
+write.xlsx(itln1Corrs,file="Brown_module_genes.xlsx")
+
+
+
+#Export network nodes and edges for cytoscape
+
+#Subselect the genes that are significantly correlated with 
+#ITLN1 with cor > 0.5, but also KME > 0.85
+currModule<-"brown"
+itln1Corrs_culled<-itln1Corrs[which(itln1Corrs$qvalue_cor < 0.05 & itln1Corrs$ITLN1_cor > 0.5 & itln1Corrs$KME > 0.85),]
+itln1Corrs_culled<-rbind(itln1Corrs[1,],itln1Corrs_culled)
+rownames(itln1Corrs_culled)<-itln1Corrs_culled$gene
+modProbes<-itln1Corrs_culled$gene
+#Select the corresponding Topological Overlap
+modTOM = TOMdissim.p[which(colnames(t(vstMat)) %in% modProbes),which(colnames(t(vstMat)) %in% modProbes)]
+dimnames(modTOM) = list(modProbes, modProbes)
+#Export the network into edge and node list files Cytoscape can read
+cyt = exportNetworkToCytoscape(modTOM,
+	edgeFile = "CytoscapeInput-edges-brown.txt",
+	nodeFile = "CytoscapeInput-nodes-brown.txt",
+	weighted = TRUE,
+	threshold = 0,
+	nodeNames = modProbes,
+	nodeAttr = itln1Corrs_culled)
+
+
+#Do pathway enrichment on all the genes
+dapsa_modules_forEnrichr<-gene2module[-which(gene2module$module == "grey"),]
+dapsa_modules_forEnrichr<-dapsa_modules_forEnrichr[order(dapsa_modules_forEnrichr$module),]
+colnames(dapsa_modules_forEnrichr)<-c("gene","comparison")
+dataset<-"dapsa_modules"
+doEnrichOneAtATime(DEG_table=dapsa_modules_forEnrichr,dataset=dataset,Enrichr_dir="./")
+
+#Subset only genes related to select functional pathways and gene sets
+ench<-read.xlsx("Data/EnrichmentsToPlot.xlsx")
+enchTab<-data.frame()
+for(i in 1:nrow(ench)){
+	enchTab<-rbind(enchTab,data.frame("Genes"=strsplit(ench[i,]$Genes,", ")[[1]],
+		"Term"=ench[i,]$Term,stringsAsFactors=F))
+}
+#Remove duplicate rows
+enchTab<-enchTab[-which(duplicated(enchTab$Gene)),]
+#Also add in top IL-13 pathology genes (removed due to redundancy: "PRB1","PRB2","CST1","CLCA1","FETUB","LYZ")
+IL13genes<-c("SH2D1B","CDH26","ITLN1","CISH","IL1RN","SPDEF","NOS2","DPP4","FOXA3","ALOX15","POSTN","FCGBP","CAPN14")
+enchTab<-rbind(enchTab,data.frame("Genes"=IL13genes,"Term"="IL13",stringsAsFactors=F))
+#Bring in the master module table, subset to enchTab, and add in the Terms
+modTab<-itln1Corrs
+rownames(modTab)<-modTab$gene
+modTab_culled<-modTab[enchTab$Genes,]
+modTab_culled<-cbind(modTab_culled,"Term"=enchTab$Term)
+
+
+#Export subsetted genes to cytoscape
+#Input
+modProbes<-modTab_culled$gene
+currModule<-"brown"
+#Select the corresponding Topological Overlap
+modTOM = TOMdissim.p[which(colnames(t(vstMat)) %in% modProbes),which(colnames(t(vstMat)) %in% modProbes)]
+dimnames(modTOM) = list(modProbes, modProbes)
+#Export the network into edge and node list files Cytoscape can read
+cyt = exportNetworkToCytoscape(modTOM,
+	edgeFile = "CytoscapeInput-edges-FUNCTIONALGENES-brown.txt",
+	nodeFile = "CytoscapeInput-nodes-FUNCTIONALGENES-brown.txt",
+	weighted = TRUE,
+	threshold = 0,
+	nodeNames = modProbes,
+	nodeAttr = modTab_culled)
+
+
+#Finally, cull edges for background (non-ILTL1 connected) genes
+#Include only the most-highly weighted edges. 
+#More strongly connected nodes get to keep a higher proportion of edges.
+#filterDegree gives the degree to which edges should be filtered.
+cullConnections<-function(br,filterDegree=NULL){
+	#Add in vector of normalized weights
+	br<-cbind(br,"weight_norm"=(br$weight - min(br$weight)) / (max(br$weight) - min(br$weight)))
+	#Now, for each node
+	br_culled<-data.frame()
+	for(i in 1:length(unique(c(br$fromNode,br$toNode)))){
+		#Make a temporary table with to and from rows involving the current gene
+		currTab<-br[which(br$fromNode == unique(c(br$fromNode,br$toNode))[i] |
+			br$toNode == unique(c(br$fromNode,br$toNode))[i]),]
+		if(unique(c(br$fromNode,br$toNode))[i] == "ITLN1"){
+			br_culled<-rbind(br_culled,cbind(currTab,"color"="red"))
+		}else{
+			#Get average normalized weight
+			meanWeight<-mean(currTab$weight_norm)
+			#Now only keep the rows for which the weight is above the meanWeight quantile
+			currTab_culled<-currTab[order(currTab$weight_norm,decreasing=T),]
+			currTab_culled<-currTab_culled[1:ceiling((nrow(currTab_culled) * (meanWeight / filterDegree))),]
+			br_culled<-rbind(br_culled,cbind(currTab_culled,"color"="grey"))
+		}
+	}
+	return(unique(br_culled))
+}
+#Bring in edges
+br = read.table("CytoscapeInput-edges-FUNCTIONALGENES-brown.txt",h=T)
+filterDegree<-10
+br_culled<-cullConnections(br=br,filterDegree=filterDegree)
+write.table(br_culled, file="CytoscapeInput-edges-FUNCTIONALGENES-CULLED-brown.txt",sep="\t",
+	quote=F, row.names=F)
+
+
+
+
 
 
 

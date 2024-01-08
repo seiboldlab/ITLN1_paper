@@ -90,3 +90,83 @@ DoEnrichment_alt<-function(genes,gene2module,background=20441){
 	return(enrichment_hyp_p[order(enrichment_hyp_p$padj),])
 }
 
+
+
+
+
+
+
+
+
+####### Pathway enrichment function
+doEnrichOneAtATime<-function(DEG_table,dataset,ngenes=NULL,Enrichr_dir="Enrichr",
+	enrichr.libraries=c("GO_Cellular_Component_2023","GO_Biological_Process_2023","GO_Molecular_Function_2023",
+	"KEGG_2021_Human","Reactome_2022","BioPlanet_2019"),minOverlap=3,minAdjPval=0.2){
+	
+	masterList<-list()
+	for(i in 1:length(unique(DEG_table$comparison))){
+		#Set current set of genes
+		currData<-as.character(DEG_table$gene[which(DEG_table$comparison == unique(DEG_table$comparison)[i])])
+		#Cull genes if desired
+		if(!is.null(ngenes)){
+			currData<-currData[1:ngenes]
+		}
+		#Run enrichr
+		enriched<-enrichr(currData,enrichr.libraries)
+		#Place results from different libraries into a single table
+		enriched_tab<-data.frame()
+		for(j in 1:length(enriched)){
+			if(nrow(enriched[[j]] > 0)){
+				enriched_tab<-rbind(enriched_tab,cbind("Gene.Set"=names(enriched)[j],enriched[[j]]))
+			}
+		}
+		#Prepare table for export
+		if(nrow(enriched_tab) > 0){
+			enriched_tab<-enriched_tab[,-c(6:8)] #weed out unwanted columns
+			enriched_tab$Overlap<-gsub("/","_",enriched_tab$Overlap) #Separate slashes with underscores
+			enriched_tab$Genes<-gsub(";",", ",enriched_tab$Genes) #Separate genes with commas
+			enriched_tab$Genes<-sapply(strsplit(enriched_tab$Genes,", "),function(x)paste(sort(x),collapse=", ")) #sort genes alphabetically
+			enriched_tab<-enriched_tab[order(enriched_tab$Adjusted.P.value),] #sort by padj
+			enriched_tab<-enriched_tab[which(enriched_tab$Adjusted.P.value < minAdjPval),] #set min padj
+			enriched_tab<-enriched_tab[which(sapply(strsplit(enriched_tab$Genes,","), #set min overlap
+				function(x)length(x)) >= minOverlap),]
+		}
+		#If there are zero columns, then add in empty columns
+		if(ncol(enriched_tab) == 0){
+			enriched_tab<-data.frame(matrix(ncol=7,nrow=0))
+			colnames(enriched_tab)<-c("Gene.Set","Term","Overlap","P.value","Adjusted.P.value","Combined.Score","Genes")
+		}
+		#Add table to master list
+		masterList[[i]]<-enriched_tab
+		names(masterList)[i]<-as.character(unique(DEG_table$comparison)[i])
+	
+		#Add slight pause since I'm getting issues with the previous result copying over to the next
+		Sys.sleep(3) 
+			
+	}
+	
+	#Export master table to file
+	wb<-createWorkbook()
+	for(i in 1:length(masterList)){
+		addWorksheet(wb,sheetName=names(masterList)[i])
+		writeData(wb,sheet=names(masterList)[i],masterList[[i]])
+		widths<-c(25,80,8,8,12,15,100)
+	 	setColWidths(wb, sheet = i, cols = 1:ncol(masterList[[i]]), widths = widths) #or use auto
+	 	freezePane(wb,i,firstRow=T)
+	 	saveWorkbook(wb, paste(Enrichr_dir,"/",dataset,"_Enrichr.output.xlsx",sep=""), overwrite = TRUE)  
+	 }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
