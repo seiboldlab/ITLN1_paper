@@ -79,10 +79,9 @@ secRna_353_norm<-counts(dds_Rna_sizeFactors, normalized=T)
 secRna_353_norm_log<-log2(secRna_353_norm + 1)
 
 #Bring in the genotypes
-itln_genotypes<-read.table("Data/ITLN1_genotype_list.txt",sep="\t",header=T,stringsAsFactors=F)
+itln_genotypes<-read.table("Data/secretome_metadata.txt",sep="\t",header=T,stringsAsFactors=F)
 
 #Cull the genotype list to match the donors we have
-itln_genotypes$Sample<-sapply(strsplit(itln_genotypes$Sample,"X"),function(x)paste("HBEC",x[2],sep=""))
 itln_genotypes<-itln_genotypes[which(itln_genotypes$Sample %in% sapply(strsplit(colnames(secRna_353_norm_log),"_"),function(x)x[1])),]
 itln_genotypes<-itln_genotypes[order(itln_genotypes$Sample),]
 itln_genotypes<-itln_genotypes[rep(1:nrow(itln_genotypes),each=2),] 
@@ -170,11 +169,12 @@ res_mucus["ITLN1",] #p-value = 1.83e-17, FDR = 6.67e-14, LFC = 7.56
 apical<-read.table("Data/secretome_count_matrix.txt")
 
 #Bring in the genotypes
-itln_genotypes<-read.table("Data/ITLN1_genotype_list.txt",sep="\t",header=T,stringsAsFactors=F)
+itln_genotypes<-read.table("Data/secretome_metadata.txt",sep="\t",header=T,stringsAsFactors=F)
 
 #Cull the genotype list to match the donors we have
-itln_genotypes<-itln_genotypes[which(itln_genotypes$Sample %in% sapply(strsplit(colnames(apical),"_"),function(x)x[1])),]
-itln_genotypes<-itln_genotypes[order(itln_genotypes$Sample),c(1,3)]
+itln_genotypes<-itln_genotypes[which(gsub("HBEC","X",itln_genotypes$Sample) %in% 
+	sapply(strsplit(colnames(apical),"_"),function(x)x[1])),]
+itln_genotypes<-itln_genotypes[order(itln_genotypes$Sample),c(1,6)]
 itln_genotypes<-itln_genotypes[rep(seq_len(nrow(itln_genotypes)), each=2),]
 
 #Specify design
@@ -256,12 +256,12 @@ colnames(mucus)<-sapply(strsplit(colnames(mucus), split ="_"),function(x)paste(x
 mucus<-mucus[,order(colnames(mucus))]
 
 #Bring in the genotypes
-itln_genotypes<-read.table("Data/ITLN1_genotype_list.txt",sep="\t",header=T,stringsAsFactors=F)
+itln_genotypes<-read.table("Data/secretome_metadata.txt",sep="\t",header=T,stringsAsFactors=F)
 
 #Cull the genotype list to match the donors we have
-itln_genotypes<-itln_genotypes[which(gsub("X","",itln_genotypes$Sample) %in% 
+itln_genotypes<-itln_genotypes[which(gsub("HBEC","",itln_genotypes$Sample) %in% 
 	sapply(strsplit(colnames(mucus),"_"),function(x)x[1])),]
-itln_genotypes<-itln_genotypes[order(itln_genotypes$Sample),c(1,3)]
+itln_genotypes<-itln_genotypes[order(itln_genotypes$Sample),c(1,6)]
 itln_genotypes<-itln_genotypes[rep(seq_len(nrow(itln_genotypes)), each=2),]
 
 #Specify design
