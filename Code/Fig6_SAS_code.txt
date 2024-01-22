@@ -1,0 +1,19 @@
+* base model;
+proc glimmix data=work.import method=rspl Maxopt=100 initglm INITITER=20;
+class SubjectID gender T2_status;
+model ceil_mean_seg_score = age_v2 gender admix1 
+admix2 T2_status rs4656959 /dist = negbinomial 
+					 covb s ddfm=kenwardroger2;
+random int / sub=SubjectID;
+run;
+
+* interaction model;
+proc glimmix data=work.import method=rspl Maxopt=100 initglm INITITER=20;
+class SubjectID gender T2_status;
+model ceil_mean_seg_score = age_v2 gender admix1 
+admix2 T2_status rs4656959 rs4656959*T2_status /dist = negbinomial 
+					covb s ddfm=kenwardroger2;
+random int / sub=SubjectID;
+estimate 't2H geno effect' Intercept 0 age_v2 0 gender 0 admix1 0 
+admix2 0 T2_status 0 rs4656959 1 rs4656959*T2_status 1 0;
+run;
