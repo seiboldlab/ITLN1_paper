@@ -29,7 +29,8 @@ dev.off()
 
 #Get p-value and fold change
 #Load raw GALA expression counts
-rawMat <- read.table("Data/GALA_raw_counts.txt", header=T, strings=F)
+#Download GSE152004_695_raw_counts.txt from GEO
+rawMat <- read.table("GSE152004_695_raw_counts.txt", header=T, strings=F)
 #Cull genes
 good_genes <- rowSums(rawMat >= 6) >= (ncol(rawMat) * .10)
 rawMat_filt <- rawMat[good_genes,]
@@ -106,6 +107,8 @@ integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT", d
 DefaultAssay(object = integrated) <- "integrated"
 integrated@meta.data$sampleID <- gsub(".*_","",rownames(integrated@meta.data))
 integrated@meta.data$sampleID <- plyr::mapvalues(integrated@meta.data$sampleID, from=c(1:2), to=names(dat))
+
+#At this point, can bring in Z002KB_3TS_integrated_culled.rds from GEO and skip the above steps#
 
 #Prep for clustering
 integrated <- RunPCA(object = integrated, npcs = 50, verbose = FALSE)
