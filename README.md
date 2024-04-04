@@ -5,7 +5,7 @@ All scripts are in the 'Code' directory and data referenced in the scripts are i
 
 Here is a summary of where gene expression/protein count data as well as metadata for all samples are located:
 
-**Large bulk RNA-seq datasets**
+**Large RNA-seq datasets**
 Large count datasets, must be downloaded from GEO:
 1. [here](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE145013) for a Seurat object containing the bronchial brushing single cell data along with cell type annotations for two donors (Z002KB_fresh = Female; Z003TS_fresh = Male) (Seurat object = Z002KB_3TS_integrated_culled.rds).
 2. [here](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE152004) for *in vivo* bulk sequence data for GALA II (raw counts = GSE152004_695_raw_counts.txt.gz).
