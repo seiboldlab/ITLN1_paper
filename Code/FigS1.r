@@ -7,49 +7,10 @@ library(edgeR)
 
 
 
+
+
 #====================================#
 #              Figure S1a            #
-#====================================#
-
-#Bring in cell fractions from CIBERSORTx
-fracts<-read.table("Data/CIBERSORTx_results_SmodeBatchCorrection_0.5threshold.txt",sep="\t",header=T,strings=F)
-
-#Bring in brown module eigengenes
-eig<-read.table("Data/WGCNA.eigengenes.txt",header=T,strings=F)
-
-#Correlate ITLN1 network expression with fractions
-correlations<-sapply(fracts[,c(2:7)],function(x)cor(x,eig$MEbrown)) %>% sort(decreasing=T)
-ci_lower<-sapply(fracts[,c(2:7)],function(x)cor.test(x,eig$MEbrown)$conf.int[1]) %>% sort(decreasing=T)
-ci_upper<-sapply(fracts[,c(2:7)],function(x)cor.test(x,eig$MEbrown)$conf.int[2]) %>% sort(decreasing=T)
-
-#Now plot
-pdf("FigS1a.pdf",width=5,height=5.5)
-cellTypeLabelsForPlot<-names(correlations)
-par(mar=c(12,7,2,2),bty="l")
-plot(x=1:length(correlations),y=correlations,ylim=c(-1,1),pch=16,las=1,xlab="",xaxt='n',ylab="Pearson correlation")
-for(i in 1:length(correlations)){
-	lines(x=c(i,i),y=c(ci_lower[i],ci_upper[i]))
-}
-abline(h=0,lty=2)
-axis(1,at=1:length(correlations),label=rep("",length(correlations)))
-text(x=1:length(correlations),y=par()$usr[3]-0.07*(par()$usr[4]-par()$usr[3]),labels=cellTypeLabelsForPlot,
-		srt=45,adj=1,xpd=T)
-dev.off()
-
-
-
-
-
-
-
-
-
-
-
-
-
-#====================================#
-#              Figure S1b            #
 #====================================#
 
 #Read in raw basolateral RNA-seq count data
@@ -95,7 +56,7 @@ secRna_353_noGG<-secRna_353_culled[,rownames(design_noGG)]
 secRna_353_norm_log_noGG<-secRna_353_norm_log[,rownames(design_noGG)]
 
 #Make plots
-pdf("FigS1b.pdf",height=3.6,width=5.7)
+pdf("FigS1a.pdf",height=3.6,width=5.7)
 #1
 par(bty="n",mfrow=c(1,2))
 boxplot(simplify2array(secRna_353_norm_log["ITLN1",])~design$treatment_status,
@@ -160,7 +121,7 @@ res_mucus["ITLN1",] #p-value = 1.83e-17, FDR = 6.67e-14, LFC = 7.56
 
 
 #====================================#
-#              Figure S1c            #
+#              Figure S1b            #
 #====================================#
 
 ######### APICAL
@@ -200,7 +161,7 @@ apical_noGG<-apical[,rownames(design_noGG)]
 apical_norm_noGG<-apical_norm[,rownames(design_noGG)]
 
 #Make plots
-pdf("FigS1c.pdf",height=3.6,width=5.7)
+pdf("FigS1b.pdf",height=3.6,width=5.7)
 #1
 par(bty="n",mfrow=c(1,2))
 boxplot(simplify2array(apical_norm["ITLN1_ITLN1",])~design$treatment_status,
@@ -245,7 +206,7 @@ res_mucus_IL13["ITLN1_ITLN1",] #p-value = 4.45E-22, FDR = 7.68E-20, LFC = 6.15
 
 
 #====================================#
-#              Figure S1d            #
+#              Figure S1c            #
 #====================================#
 
 ######### MUCUS
@@ -287,7 +248,7 @@ mucus_noGG<-mucus[,rownames(design_noGG)]
 mucus_norm_noGG<-mucus_norm[,rownames(design_noGG)]
 
 #Make plots
-pdf("FigS1d.pdf",height=3.6,width=5.7)
+pdf("FigS1c.pdf",height=3.6,width=5.7)
 #1
 par(bty="n",mfrow=c(1,2))
 boxplot(simplify2array(mucus_norm["ITLN1",])~design$treatment_status,
@@ -349,6 +310,42 @@ res_mucus["ITLN1",]
 #   logFC   logCPM        F      PValue       FDR
 #5.789402 8.878016 391.3461 0.002412796 0.2491384	
 
+
+
+
+
+
+
+
+
+#====================================#
+#              Figure S1d            #
+#====================================#
+
+#Bring in cell fractions from CIBERSORTx
+fracts<-read.table("Data/CIBERSORTx_results_SmodeBatchCorrection_0.5threshold.txt",sep="\t",header=T,strings=F)
+
+#Bring in brown module eigengenes
+eig<-read.table("Data/WGCNA.eigengenes.txt",header=T,strings=F)
+
+#Correlate ITLN1 network expression with fractions
+correlations<-sapply(fracts[,c(2:7)],function(x)cor(x,eig$MEbrown)) %>% sort(decreasing=T)
+ci_lower<-sapply(fracts[,c(2:7)],function(x)cor.test(x,eig$MEbrown)$conf.int[1]) %>% sort(decreasing=T)
+ci_upper<-sapply(fracts[,c(2:7)],function(x)cor.test(x,eig$MEbrown)$conf.int[2]) %>% sort(decreasing=T)
+
+#Now plot
+pdf("FigS1d.pdf",width=5,height=5.5)
+cellTypeLabelsForPlot<-names(correlations)
+par(mar=c(12,7,2,2),bty="l")
+plot(x=1:length(correlations),y=correlations,ylim=c(-1,1),pch=16,las=1,xlab="",xaxt='n',ylab="Pearson correlation")
+for(i in 1:length(correlations)){
+	lines(x=c(i,i),y=c(ci_lower[i],ci_upper[i]))
+}
+abline(h=0,lty=2)
+axis(1,at=1:length(correlations),label=rep("",length(correlations)))
+text(x=1:length(correlations),y=par()$usr[3]-0.07*(par()$usr[4]-par()$usr[3]),labels=cellTypeLabelsForPlot,
+		srt=45,adj=1,xpd=T)
+dev.off()
 
 
 
